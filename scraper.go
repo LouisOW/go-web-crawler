@@ -138,6 +138,12 @@ func main() {
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
-	fmt.Println("Server started at :8080")
-	http.ListenAndServe(":8080", nil)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+		fmt.Println("No PORT environment variable detected, defaulting to " + port)
+	}
+
+	fmt.Println("Server started at :" + port)
+	http.ListenAndServe(":"+port, nil)
 }
