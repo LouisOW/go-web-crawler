@@ -27,7 +27,12 @@
             const form = event.target;
             const formData = new FormData(form);
 
-            const ws = new WebSocket(`ws://${window.location.host}/upload`);
+            let protocol = 'ws://';
+            if (window.location.protocol === 'https:') {
+                protocol = 'wss://';
+            }
+
+            const ws = new WebSocket(`${protocol}${window.location.host}/upload`);
 
             ws.onopen = () => {
                 const file = formData.get("file");
