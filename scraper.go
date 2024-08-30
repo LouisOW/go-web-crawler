@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"html/template"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -14,10 +16,12 @@ import (
 )
 
 type PageInfo struct {
-	URL        string
-	Title      string
-	StatusCode int
-	LoadTime   time.Duration
+	URL                string
+	Title              string
+	StatusCode         int
+	LoadTime           time.Duration
+	SelfReferencingURL bool
+	AnchorDetails      string
 }
 
 var upgrader = websocket.Upgrader{
@@ -28,6 +32,53 @@ var upgrader = websocket.Upgrader{
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	t, _ := template.ParseFiles("templates/upload.html")
 	t.Execute(w, nil)
+}
+
+// List of classes to ignore
+var ignoredClasses = map[string]bool{
+	"footer__copy-logo":                  true,
+	"header__upper-link":                 true,
+	"mp-share__toggle":                   true,
+	"mp-share__toggle  breadcrumbs__tag": true,
+	"mp-link mp-link--dark localisation-toggle localisation-setter": true,
+	"hash-scroll":                       true,
+	"mp-available-session__show-detail": true,
+	"mp-available-session__hide-detail": true,
+	// Add more classes as needed
+}
+
+// Function to check for self-referencing links with href="#" and ignore specified classes
+func checkSelfReferencingLinks(doc *goquery.Document) (bool, string) {
+	found := false
+	var anchorDetails []string
+
+	doc.Find("a").Each(func(i int, s *goquery.Selection) {
+		href, _ := s.Attr("href")
+		class, _ := s.Attr("class")
+
+		// Check if the href is exactly "#" and class is not in ignored classes
+		if href == "#" && !ignoredClasses[class] {
+			title := s.AttrOr("title", "No title")
+			anchor := fmt.Sprintf("<a href=\"%s\" class=\"%s\" title=\"%s\">", href, class, title)
+			anchorDetails = append(anchorDetails, anchor)
+			found = true
+			fmt.Printf("Self-referencing link found (not ignored class):\n")
+			fmt.Printf("URL: %s\n", href)
+			fmt.Printf("Class: %s\n", class)
+			fmt.Printf("Title: %s\n", title)
+			fmt.Println("-----")
+		}
+	})
+
+	return found, strings.Join(anchorDetails, ",")
+}
+
+func removeBOM(s string) string {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	if bytes.HasPrefix([]byte(s), bom) {
+		return string(bytes.TrimPrefix([]byte(s), bom))
+	}
+	return s
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +110,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	file.Seek(0, 0)
 	reader := csv.NewReader(file)
+
 	var pageInfos []PageInfo
 	var urls []string
 
@@ -68,10 +120,19 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if err != nil {
+			fmt.Println("Error reading CSV file:", err)
 			conn.WriteMessage(websocket.TextMessage, []byte("Error reading CSV file"))
 			return
 		}
-		urls = append(urls, record[0])
+
+		url := removeBOM(strings.TrimSpace(record[0]))
+		if url == "" {
+			fmt.Println("Empty URL found, skipping.")
+			continue
+		}
+
+		fmt.Printf("Processing URL: %s\n", url)
+		urls = append(urls, url)
 	}
 
 	totalUrls := len(urls)
@@ -82,6 +143,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		resp, err := http.Get(url)
 		if err != nil {
 			pageInfos = append(pageInfos, PageInfo{URL: url, Title: "Error", StatusCode: 0, LoadTime: 0})
+			fmt.Printf("Error fetching URL: %s, error: %v\n", url, err)
 			continue
 		}
 		defer resp.Body.Close()
@@ -90,11 +152,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
 			pageInfos = append(pageInfos, PageInfo{URL: url, Title: "Error", StatusCode: resp.StatusCode, LoadTime: loadTime})
+			fmt.Printf("Error parsing HTML for URL: %s, error: %v\n", url, err)
 			continue
 		}
 
 		title := doc.Find("title").Text()
-		pageInfos = append(pageInfos, PageInfo{URL: url, Title: title, StatusCode: resp.StatusCode, LoadTime: loadTime})
+		selfReferencingURL, anchorDetails := checkSelfReferencingLinks(doc)
+		pageInfos = append(pageInfos, PageInfo{
+			URL:                url,
+			Title:              title,
+			StatusCode:         resp.StatusCode,
+			LoadTime:           loadTime,
+			SelfReferencingURL: selfReferencingURL,
+			AnchorDetails:      anchorDetails,
+		})
 
 		progress := int(float64(i+1) / float64(totalUrls) * 100)
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("Progress: %d%%", progress)))
@@ -111,13 +182,15 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	writer := csv.NewWriter(outputFile)
 	defer writer.Flush()
 
-	writer.Write([]string{"URL", "Title", "Status Code", "Load Time (ms)"})
+	writer.Write([]string{"URL", "Title", "Status Code", "Load Time (ms)", "Self-Referencing URL with #", "Anchor Details"})
 	for _, pageInfo := range pageInfos {
 		writer.Write([]string{
 			pageInfo.URL,
 			pageInfo.Title,
 			fmt.Sprintf("%d", pageInfo.StatusCode),
 			fmt.Sprintf("%d", pageInfo.LoadTime.Milliseconds()),
+			fmt.Sprintf("%t", pageInfo.SelfReferencingURL),
+			pageInfo.AnchorDetails,
 		})
 	}
 
