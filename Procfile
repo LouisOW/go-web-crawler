@@ -1,1 +1,1 @@
-web: go build -o scraper && ./scraper
+web: ./scraper
