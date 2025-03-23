@@ -46,5 +46,12 @@ GOOS=linux GOARCH=amd64 go build -o scraper
 Finally, to run the appllication use:
 
 ```bash
+#since we built for linux for Heroku you can run the file directly by using
+go run scraper.go
+
+#to build for your current system, use:
+go build -o scraper
+
+#then run using:
 ./scraper
 ```
