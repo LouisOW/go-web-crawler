@@ -35,10 +35,10 @@ go mod tidy
 
 ## Step 4: Build the Application
 
-To build the application, run the following command:
+To build the application, run the following command to build for linux:
 
 ```bash
-go build -o scraper
+GOOS=linux GOARCH=amd64 go build -o scraper
 ```
 
 ## Step 5: Run the Application
