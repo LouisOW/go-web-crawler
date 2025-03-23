@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Upload CSV</title>
+    <title>Scraper</title>
     <link rel="stylesheet" href="/static/styles.css">
 
 
@@ -20,7 +20,9 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1 class="title">Upload CSV</h1>
+            <h1 class="title">Upload URL CSV</h1>
+            <p>The .csv file should contain a list of URLs in one column with no header<br></p>
+            <p>‎ </p>
             <form enctype="multipart/form-data" action="/upload" method="post" onsubmit="uploadFile(event)">
                 <input type="file" name="file" accept=".csv" class="file-input">
                 <input type="submit" value="Upload CSV" class="upload-button">
