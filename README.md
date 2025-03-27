@@ -33,20 +33,12 @@ If the project has any dependencies, run the following command to fetch them:
 go mod tidy
 ```
 
-## Step 4: Build the Application
-
-To build the application, run the following command to build for linux:
-
-```bash
-GOOS=linux GOARCH=amd64 go build -o scraper
-```
-
-## Step 5: Run the Application
+## Step 4: Run the Application
 
 Finally, to run the appllication use:
 
 ```bash
-#since we built for linux for Heroku you can run the file directly by using
+#you can run the file directly by using
 go run scraper.go
 
 #to build for your current system, use:
@@ -55,3 +47,14 @@ go build -o scraper
 #then run using:
 ./scraper
 ```
+
+## Step 5 (optional): Build the Application for Heroku
+
+To build the application, run the following command to build for linux(for Heroku to run:
+
+To build for Heroku
+```bash
+GOOS=linux GOARCH=amd64 go build -o scraper
+```
+
+*instructions to be added for hosting on Heroku*
